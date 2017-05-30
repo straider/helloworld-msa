@@ -1,0 +1,20 @@
+{
+  "ola-chaining": {
+      "url": "OLACHAINURL"
+  },
+  "hola-service": {
+    "url": "HOLAURL"
+  },
+  "bonjour-service": {
+    "url": "BONJOURURL"
+  },
+  "aloha-service": {
+    "url": "ALOHAURL"
+  },
+  "ola-service": {
+    "url": "OLAURL"
+  },
+  "api-gateway": {
+    "url": "APIGATEWAYURL"
+  }
+}

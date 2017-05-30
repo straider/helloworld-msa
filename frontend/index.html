@@ -1,0 +1,276 @@
+<!--
+   JBoss, Home of Professional Open Source
+   Copyright 2016, Red Hat, Inc. and/or its affiliates, and individual
+   contributors by the @authors tag. See the copyright.txt in the
+   distribution for a full listing of individual contributors.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+   http://www.apache.org/licenses/LICENSE-2.0
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Microservices Frontend</title>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- PatternFly Styles -->
+<!-- Note: No other CSS files are needed regardless of what other JS packages located in patternfly/components that you decide to pull in -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.23.0/css/patternfly.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.23.0/css/patternfly-additions.min.css" />
+
+<!-- jQuery -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+
+<!-- Bootstrap JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/js/bootstrap.min.js"></script>
+
+<!-- Keycloak JS -->
+<script src="node_modules/keycloak-js/dist/keycloak.js"></script>
+
+</head>
+<body>
+
+	<!-- Black Header -->
+	<nav class="navbar navbar-default navbar-pf" role="navigation">
+		<div class="navbar-header">
+			<a class="navbar-brand" href="/">Red Hat - Hello world MSA (Microservices Architecture) </a>
+		</div>
+		<!-- Nav tabs -->
+		<ul class="nav navbar-nav navbar-primary" id="mytabs">
+			{{#sso}}
+				<li role="presentation" class="active"><a href="#sso">SSO</a></li>
+			{{/sso}}
+			<li role="presentation"><a href="#browser">Browser as a client</a></li>
+			<li role="presentation"><a href="#apigateway">API Gateway</a></li>
+			<li role="presentation"><a href="#servicechain">Service chaining</a></li>
+			{{#hystrix}}
+				<li role="presentation"><a href="#hystrix">Hystrix Dashboard</a></li>
+			{{/hystrix}}
+			{{#jaeger}}
+			<li role="presentation"><a href="#jaeger">Jaeger Dashboard</a></li>
+			{{/jaeger}}
+		</ul>
+
+	</nav>
+
+	<div class="container-fluid">
+
+
+		<!-- Tab panes -->
+		<div class="tab-content">
+
+			<!--  Tab SSO Dashaboard -->
+			{{#sso}}
+			<div role="tabpanel" class="tab-pane active" id="sso">
+
+				<div class="page-header page-header-bleed-right">
+					<div class="actions pull-right">
+						<a id="refresh-sso" href="#"><span class="pficon pficon-refresh"></span>Refresh Results</a>
+						|
+						<a id="show-login-link" style="display: none; cursor: pointer;" ref="#" onclick="keycloak.login()"><span class="pficon pficon-user"></span>Login</a>
+						<a id="show-logout-link" style="display: none; cursor: pointer;" href="#" onclick="keycloak.logout()"><span class="pficon pficon-import"></span>Logout</a>
+						|
+						<span id="login-status"></span>
+					</div>
+					<h1>Using SSO Client</h1>
+				</div>
+
+				<div id="tab-sso-content" style="width: 45%; float: left;">
+					<div class="row">
+						<div class="col-sm-6 ">
+							<!-- Hola Service -->
+							<div class="panel panel-default">
+								<div class="panel-heading">
+									<h3 class="panel-title">Hola Secured</h3>
+									(JAX-RS / WildFly Swarm)
+								</div>
+								<div id="hola-service-secured" class="panel-body">Unauthorized</div>
+							</div>
+
+						</div>
+						<div class=" col-sm-6 ">
+							<!-- Olá Service -->
+							<div class="panel panel-default">
+								<div class="panel-heading">
+									<h3 class="panel-title">Olá Secured</h3>
+									(Spring Boot)
+								</div>
+								<div id="ola-service-secured" class="panel-body">Unauthorized</div>
+							</div>
+						</div>
+					</div>
+					<div class="row">
+						<div class="col-sm-6 ">
+							<!-- Bonjour Service -->
+							<div class="panel panel-default">
+								<div class="panel-heading">
+									<h3 class="panel-title">Bonjour Secured</h3>
+									(NodeJS / Express)
+								</div>
+								<div id="bonjour-service-secured" class="panel-body">Unauthorized</div>
+							</div>
+						</div>
+
+						<div class="col-sm-6 ">
+							<!-- Aloha Service -->
+							<div class="panel panel-default">
+								<div class="panel-heading">
+									<h3 class="panel-title">Aloha Secured</h3>
+									(Vert.x)
+								</div>
+								<div id="aloha-service-secured" class="panel-body">Unauthorized</div>
+							</div>
+						</div>
+					</div>
+					<a id="refresh-sso2" href="#"><span class="pficon pficon-refresh"></span>Refresh Results</a>
+				</div>
+				<img src="images/sso.svg" style="float: right; width: 50%; height: 30em;" />
+			</div>
+			{{/sso}}
+
+			<!--  Tab Browser Client -->
+			<div role="tabpanel" class="tab-pane" id="browser">
+				<div class="page-header page-header-bleed-right">
+					<div class="actions pull-right">
+						<a id="refresh-browser" href="#"><span class="pficon pficon-refresh"></span>Refresh Results</a>
+					</div>
+					<h1>Using Browser as a Client</h1>
+				</div>
+
+				<div id="tab-browser-content" style="width: 45%; float: left;">
+					<div class="row">
+						<div class="col-sm-6 ">
+							<!-- Hola Service -->
+							<div class="panel panel-default">
+								<div class="panel-heading">
+									<h3 class="panel-title">Hola Service</h3>
+									(JAX-RS / WildFly Swarm)
+								</div>
+								<div id="hola-service" class="panel-body">Loading....</div>
+							</div>
+
+						</div>
+						<div class=" col-sm-6 ">
+							<!-- Olá Service -->
+							<div class="panel panel-default">
+								<div class="panel-heading">
+									<h3 class="panel-title">Olá Service</h3>
+									(Spring Boot)
+								</div>
+								<div id="ola-service" class="panel-body">Loading....</div>
+							</div>
+						</div>
+					</div>
+					<div class="row">
+						<div class="col-sm-6 ">
+							<!-- Bonjour Service -->
+							<div class="panel panel-default">
+								<div class="panel-heading">
+									<h3 class="panel-title">Bonjour Service</h3>
+									(NodeJS / Express)
+								</div>
+								<div id="bonjour-service" class="panel-body">Loading....</div>
+							</div>
+						</div>
+
+						<div class="col-sm-6 ">
+							<!-- Aloha Service -->
+							<div class="panel panel-default">
+								<div class="panel-heading">
+									<h3 class="panel-title">Aloha Service</h3>
+									(Vert.x)
+								</div>
+								<div id="aloha-service" class="panel-body">Loading....</div>
+							</div>
+						</div>
+					</div>
+					<a id="refresh-browser2" href="#"><span class="pficon pficon-refresh"></span>Refresh Results</a>
+				</div>
+				<img src="images/browser-client.svg" style="float: right; width: 50%; height: 30em;" />
+			</div>
+
+			<!--  Tab API Gateway -->
+			<div role="tabpanel" class="tab-pane" id="apigateway">
+				<div class="page-header page-header-bleed-right">
+					<div class="actions pull-right">
+						<a href="#" id="refresh-apigateway"><span class="pficon pficon-refresh"></span>Refresh Results</a>
+					</div>
+					<h1>Using an API Gateway</h1>
+				</div>
+				<div id="tab-apigateway-content" style="width: 40%; float: left;">
+					<!-- API Gateway -->
+					<div class="panel panel-default">
+						<div class="panel-heading">
+							<h3 class="panel-title">API Gateway</h3>
+						</div>
+						<div id="api-gateway" class="panel-body">Loading....</div>
+
+					</div>
+					<a href="#" id="refresh-apigateway2"><span class="pficon pficon-refresh"></span>Refresh Results</a>
+				</div>
+				<img src="images/api-gateway.svg" style="float: right; width: 50%; height: 25em" />
+			</div>
+
+			<!--  Tab Service Chaining -->
+			<div role="tabpanel" class="tab-pane" id="servicechain">
+				<div class="page-header page-header-bleed-right">
+					<div class="actions pull-right">
+						<a href="#" id="refresh-chain"><span class="pficon pficon-refresh"></span>Refresh Results</a>
+					</div>
+					<h1>Using Service chaining</h1>
+				</div>
+				<div id="tab-servicechain-content" style="width: 40%; float: left;">
+					<!-- Service Chaining -->
+					<div class="panel panel-default">
+						<div class="panel-heading">
+							<h3 class="panel-title">Service Chaining</h3>
+						</div>
+						<div id="service-chain" class="panel-body">Loading....</div>
+					</div>
+					<a href="#" id="refresh-chain2"><span class="pficon"></span>Refresh Results</a>
+				</div>
+				<img src="images/service-chaining.svg" style="float: right; width: 50%; height: 25em" />
+			</div>
+
+			<!--  Tab Hystrix Dashaboard -->
+			{{#hystrix}}
+			<div role="tabpanel" class="tab-pane" id="hystrix">
+				<iframe style="padding-top: 5vh; border: 0; width: 100%; height: 80vh; position: inherit;"
+					id="hystrix-dashboard-iframe"
+					src="HYSTRIXDASHBOARDURL/monitor/monitor.html?stream=http%3A%2F%2Fturbine-server%2Fturbine.stream"> </iframe>
+			</div>
+			{{/hystrix}}
+
+			<!--  Tab Jaeger Dashaboard -->
+			{{#jaeger}}
+			<div role="tabpanel" class="tab-pane" id="jaeger" style="text-align: center; padding-top: 20px; font-size: x-large;">
+				<!-- It needs to be opened in another window because it doesn't fit inside an iFrame -->
+        		<a href="JAEGERQUERYURL" target="_blank">Open Jaeger Dashboard in another tab/window</a>
+        	</div>
+			{{/jaeger}}
+		</div>
+	</div>
+
+
+
+	<!-- Page script -->
+	<script src="scripts/page.js"></script>
+	<!-- Browser-Client script -->
+	<script src="scripts/browser-client.js"></script>
+	<!-- Chain Service script -->
+	<script src="scripts/service-chain.js"></script>
+	<!-- API Gateway script -->
+	<script src="scripts/api-gateway.js"></script>
+	<!-- SSO script -->
+	<script src="scripts/sso.js"></script>
+</body>
+</html>
