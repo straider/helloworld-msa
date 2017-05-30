@@ -1,0 +1,44 @@
+hawkular_server:
+  url: http://127.0.0.1:8080
+  tenant: hawkular
+  credentials:
+    username: jdoe
+    password: password
+emitter:
+  address: :8081
+  status_enabled: true
+  status_credentials:
+    username: dev
+    password: changeme
+collector:
+  minimum_collection_interval: 10s
+  tags:
+    agent-host: ${HOSTNAME}
+kubernetes:
+  master_url: https://10.2.2.2:8443
+  #ca_cert_file: /path/to/ca.crt
+  #token: ...bearer token here...
+  #pod_name: hawkular-metrics-ns2ij
+  #pod_namespace: openshift-infra
+endpoints:
+  # the agent endpoint
+  - type: prometheus
+    enabled: true
+    url: http://127.0.0.1:8081/metrics
+    collection_interval: 10s
+    tags:
+      endpoint-name: hawkular-openshift-agent
+  # prometheus-python-example
+  - type: prometheus
+    enabled: false
+    url: http://127.0.0.1:8181/metrics
+    collection_interval: 10s
+    tags:
+      endpoint-name: prometheus-python-example
+  # go-expvar-example
+  - type: json
+    enabled: false
+    url: http://127.0.0.1:8181/debug/vars
+    collection_interval: 10s
+    tags:
+      endpoint-name: go-expvar-example

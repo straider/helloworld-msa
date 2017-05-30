@@ -1,0 +1,105 @@
+id: hawkular-openshift-agent-example-jolokia-wildfly
+kind: Template
+apiVersion: v1
+name: hawkular-openshift-agent-example-jolokia-wildfly
+metadata:
+  name: hawkular-openshift-agent-example-jolokia-wildfly
+  labels:
+    hawkular-openshift-agent-example: jolokia-wildfly
+parameters:
+- description: The version of the image to use
+  name: IMAGE_VERSION
+  value: latest
+- description: The password used for the Jolokia endpoint authentication
+  name: JOLOKIA_PASSWORD
+  generate: expression
+  from: '[a-zA-Z0-9]{15}'
+  required: true
+- description: The username used for the Jolokia endpoint authentication
+  name: JOLOKIA_USER
+  value: jolokia
+objects:
+- apiVersion: v1
+  kind: ReplicationController
+  metadata:
+    name: hawkular-openshift-agent-example-jolokia-wildfly
+    labels:
+      name: hawkular-openshift-agent-example-jolokia-wildfly
+      hawkular-openshift-agent-example: jolokia-wildfly
+  spec:
+    selector:
+      name: hawkular-openshift-agent-example-jolokia-wildfly
+    replicas: 1
+    template:
+      version: v1
+      metadata:
+        labels:
+          name: hawkular-openshift-agent-example-jolokia-wildfly
+          hawkular-openshift-agent-example: jolokia-wildfly
+      spec:
+        containers:
+        - image: hawkular/hawkular-openshift-agent-example-jolokia-wildfly:${IMAGE_VERSION}
+          name: hawkular-openshift-agent-example-jolokia-wildfly
+          ports:
+          - name: jolokia
+            containerPort: 8778
+          - name: http
+            containerPort: 8080
+          - name: https
+            containerPort: 8443
+          env:
+          - name: JOLOKIA_PASSWORD
+            value: ${JOLOKIA_PASSWORD}
+          - name: JOLOKIA_USER
+            value: ${JOLOKIA_USER}
+          - name: JAVA_OPTS_APPEND
+            value: "-javaagent:$JBOSS_HOME/jolokia.jar=port=8778,protocol=https,caCert=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt,clientPrincipal=cn=system:master-proxy,useSslClientAuthentication=true,extraClientCheck=true,host=0.0.0.0,discoveryEnabled=false,user=${JOLOKIA_USER},password=${JOLOKIA_PASSWORD}"
+        volumes:
+        - name: hawkular-openshift-agent
+          configMap:
+            name: hawkular-openshift-agent-example-jolokia-wildfly
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: hawkular-openshift-agent-example-jolokia-wildfly
+    labels:
+      name: hawkular-openshift-agent-example-jolokia-wildfly
+      hawkular-openshift-agent-example: jolokia-wildfly
+  data:
+    hawkular-openshift-agent: |
+      endpoints:
+      - type: jolokia
+        protocol: https
+        port: 8778
+        path: /jolokia/
+        collection_interval: 15s
+        tls:
+          skip_certificate_validation: true
+        credentials:
+          username: ${JOLOKIA_USER}
+          password: ${JOLOKIA_PASSWORD}
+        metrics:
+        # int data value
+        - name: java.lang:type=Memory#ObjectPendingFinalizationCount
+          type: gauge
+          description: Object Pending Finalization Count
+        # long data value
+        - name: java.lang:type=OperatingSystem#OpenFileDescriptorCount
+          type: gauge
+          description: Open File Descriptor Count
+        # double data value
+        - name: java.lang:type=OperatingSystem#ProcessCpuLoad
+          type: gauge
+          description: Process CPU Load
+        # composite data value
+        - name: java.lang:type=Memory#HeapMemoryUsage#used
+          type: gauge
+          description: Heap Memory Used
+          units: B
+        # boolean value
+        - name: java.lang:type=Memory#Verbose
+          type: gauge
+          description: Memory Verbose Mode
+        # multiple attributes/multiple mbeans
+        - name: jboss.as:subsystem=datasources,data-source=*,statistics=jdbc#*
+          type: gauge

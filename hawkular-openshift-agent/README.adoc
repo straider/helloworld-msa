@@ -1,0 +1,933 @@
+= Hawkular OpenShift Agent image:https://travis-ci.org/hawkular/hawkular-openshift-agent.svg["Build Status", link="https://travis-ci.org/hawkular/hawkular-openshift-agent"]
+:toc: macro
+:toc-title:
+
+toc::[]
+
+== Introduction
+
+Hawkular OpenShift Agent is a Hawkular feed implemented in the Go Programming Language. Its main purpose is to monitor a node within an OpenShift environment, collecting metrics from Prometheus and/or Jolokia endpoints deployed in one or more pods within the node. It can also be used to collect metrics from endpoints outside of OpenShift. The agent can be deployed inside the OpenShift node it is monitoring, or outside of OpenShift completely.
+
+Watch link:https://www.youtube.com/watch?v=jvOPlz7lzyM[this quick 10-minute demo] to see the agent in action.
+
+Note that the agent does not collect or store inventory at this time - this is strictly a metric collection and storage agent that integrates with Hawkular Metrics.
+
+=== Docker Image
+
+Hawkular OpenShift Agent is published as a docker image on https://hub.docker.com/r/hawkular/hawkular-openshift-agent[Docker hub at hawkular/hawkular-openshift-agent]
+
+=== License and Copyright
+
+....
+   Copyright 2016-2017 Red Hat, Inc. and/or its affiliates
+   and other contributors.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+....
+
+== Building
+
+[NOTE]
+These build instructions assume you have the following installed on your system: (1) link:http://golang.org/doc/install[Go Programming Language] which must be at least version 1.7, (2) link:http://git-scm.com/book/en/v2/Getting-Started-Installing-Git[git], (3) link:https://docs.docker.com/installation/[Docker], and (4) make. To run Hawkular OpenShift Agent inside OpenShift after you build it, it is assumed you have a running OpenShift environment available to you. If you do not, you can find a set of link:#setting-up-openshift[instructions on how to set up OpenShift below].
+
+To build Hawkular OpenShift Agent:
+
+* Clone this repository inside a GOPATH. These instructions will use the example GOPATH of "/source/go/hawkular-openshift-agent" but you can use whatever you want. Just change the first line of the below instructions to use your GOPATH.
+
+[source,shell]
+----
+export GOPATH=/source/go/hawkular-openshift-agent
+mkdir -p $GOPATH
+cd $GOPATH
+mkdir -p src/github.com/hawkular
+cd src/github.com/hawkular
+git clone git@github.com:hawkular/hawkular-openshift-agent.git
+export PATH=${PATH}:${GOPATH}/bin
+----
+
+* Install Glide - a Go dependency management tool that Hawkular OpenShift Agent uses to build itself
+
+[source,shell]
+----
+cd ${GOPATH}/src/github.com/hawkular/hawkular-openshift-agent
+make install-glide
+----
+
+* Tell Glide to install the Hawkular OpenShift Agent dependencies
+
+[source,shell]
+----
+cd ${GOPATH}/src/github.com/hawkular/hawkular-openshift-agent
+make install-deps
+----
+
+* Build Hawkular OpenShift Agent
+
+[source,shell]
+----
+cd ${GOPATH}/src/github.com/hawkular/hawkular-openshift-agent
+make build
+----
+
+* At this point you can run the Hawkular OpenShift Agent tests
+
+[source,shell]
+----
+cd ${GOPATH}/src/github.com/hawkular/hawkular-openshift-agent
+make test
+----
+
+== Running
+
+=== Running Inside OpenShift
+
+==== Setting up OpenShift
+The following section assumes that the user has link:https://github.com/openshift/origin[OpenShift Origin] installed with link:https://github.com/openshift/origin-metrics[metrics] enabled.
+
+The link:https://docs.openshift.org/latest/welcome/index.html[OpenShift Origin Documentation] will outline all the steps required. Please make sure to follow the link:https://docs.openshift.org/latest/install_config/cluster_metrics.html[steps involved to deploying metrics].
+
+If you wish to forgo installing and configuring OpenShift with metrics yourself, the `oc cluster up` command can be used to get an instance of OpenShift Origin with metrics enabled:
+
+[source,shell]
+----
+oc cluster up --metrics
+----
+
+[NOTE]
+In order to install the agent into OpenShift you will need to have admin priviledges for the OpenShift cluster.
+
+==== Building the Docker Image
+
+Create the Hawkular OpenShift Agent docker image through the "docker" make target:
+
+[source,shell]
+----
+cd ${GOPATH}/src/github.com/hawkular/hawkular-openshift-agent
+make docker
+----
+
+==== Deploying the Agent Inside OpenShift
+
+[NOTE]
+The following sections assume that the `oc` command is available in the user's path and that the user is logged in as a user with cluster admin privileges.
+
+[TIP]
+====
+If you do not want to manually deploy the agent into OpenShift, the steps are automated in the Makefile. The following will undeploy an old installation of the agent, if available, and deploy a new one:
+----
+make openshift-deploy
+----
+====
+
+To deploy the agent, you will need to follow the following commands:
+
+[source,shell]
+----
+oc create -f deploy/openshift/hawkular-openshift-agent-configmap.yaml -n default
+oc process -f deploy/openshift/hawkular-openshift-agent.yaml | oc create -n default -f -
+oc adm policy add-cluster-role-to-user hawkular-openshift-agent system:serviceaccount:default:hawkular-openshift-agent
+----
+
+==== Undeploying the Agent
+
+If you want to remove the agent from your OpenShift environment, you can do so by running the following command:
+
+[source,shell]
+----
+oc delete all,secrets,sa,templates,configmaps,daemonsets,clusterroles --selector=metrics-infra=agent -n default
+oc delete clusterroles hawkular-openshift-agent # this is only needed until this bug is fixed: https://github.com/openshift/origin/issues/12450
+----
+
+Alternatively, the following will also perform the same task from the Makefile:
+
+[source,shell]
+----
+make openshift-undeploy
+----
+
+=== Running Outside OpenShift
+
+[NOTE]
+You must customize Hawkular OpenShift Agent's configuration file so it can be told things like your Hawkular Metrics server endpoint. If you want the agent to connect to an OpenShift master, you need the OpenShift CA cert file which can be found in your OpenShift installation at `openshift.local.config/master/ca.crt`. If you installed OpenShift in a VM via vagrant, you can use `vagrant ssh` to find this at `/var/lib/origin/openshift.local.config/master/ca.crt`. If you wish to configure the agent with environment variables as opposed to the config file, see link:#environment-variables[below] for the environment variables that the agent looks for.
+
+[source,shell]
+----
+cd ${GOPATH}/src/github.com/hawkular/hawkular-openshift-agent
+make install
+make run
+----
+
+The "install" target installs the Hawkular OpenShift Agent executable in your GOPATH /bin directory so you can run it outside of the Makefile:
+
+[source,shell]
+----
+cd ${GOPATH}/src/github.com/hawkular/hawkular-openshift-agent
+make install
+${GOPATH}/bin/hawkular-openshift-agent -config <your-config-file>
+----
+
+If you don't want to store your token in the YAML file, you can pass it via an environment variable:
+
+[source,shell]
+----
+K8S_TOKEN=`oc whoami -t` ${GOPATH}/bin/hawkular-openshift-agent -config config.yaml
+----
+
+== Configuring OpenShift
+
+When Hawkular OpenShift Agent is monitoring resources running on an OpenShift node, it looks at volumes and config maps to know what to monitor. In effect, the pods tell Hawkular OpenShift Agent what to monitor, and Hawkular OpenShift Agent does it. (Note that where "OpenShift" is mentioned, it is normally synonymous with "Kubernetes" because Hawkular OpenShift Agent is really interfacing with the underlying Kubernetes software that is running in OpenShift)
+
+One caveat must be mentioned up front. Hawkular OpenShift Agent will only monitor a single OpenShift node. If you want to monitor multiple OpenShift nodes, you must run one Hawkular OpenShift Agent process per node. The agent can be deployed as a daemonset to make this easier.
+
+There are two features in OpenShift that Hawkular OpenShift Agent takes advantage of when it comes to configuring what Hawkular OpenShift Agent should be monitoring - one is pod volumes and the second is project config maps.
+
+=== Pod Volumes
+
+Each pod running on the node has a set of volumes. A volume can refer to different types of entities with config maps being one such type that can be referred to by a volume. Hawkular OpenShift Agent expects to see a volume named `hawkular-openshift-agent` on a pod that is to be monitored and it is expected to be referring to a config map. If this named volume is missing, it is assumed you do not want Hawkular OpenShift Agent to monitor that pod. The name of the volume's config map refers to a config map found within the pod's project. If the config map is not found in the pod's project, again Hawkular OpenShift Agent will not monitor the pod.
+
+=== Project Config Map
+
+Pods are grouped in what are called "projects" in OpenShift (Kubernetes calls these "namespaces" - if you see "namespace" in the Hawkular OpenShift Agent configuration settings and log messages, realize it is talking about an OpenShift project). Each project can have what are called "config maps". Similiar to annotations, config maps contain name/value pairs. The values can be as simple as short strings or as complex as complete YAML or JSON blobs. Because config maps are on projects, they are associated with multiple pods (the pods within the project).
+
+Hawkular OpenShift Agent takes advantage of a project's config maps by using them as places to put YAML configuration for each monitored pod that belongs to the project. Each pod configuration is found in one config map. The config map that Hawkular OpenShift Agent will look for must be named the same as the config map name found in a pod's "hawkular-openshift-agent" volume.
+
+=== Config Map Entry Schema
+
+Each Hawkular OpenShift Agent config map must have an entry named "hawkular-openshift-agent". A config map entry is a YAML configuration. The Go representation of the YAML schema is found link:https://github.com/hawkular/hawkular-openshift-agent/blob/master/k8s/configmap_entry.go[here].
+
+So, in short, each OpenShift project (aka Kubernetes namespace) will have multiple config maps each with an entry named "hawkular-openshift-agent" where those entries contain YAML configuration containing information about what should be monitored on a pod. A named config map is referenced by a pod's volume which is also called "hawkular-openshift-agent".
+
+Hawkular OpenShift Agent examines each pod on the node and by cross-referencing the pod volumes with the project config maps, Hawkular OpenShift Agent knows what it should monitor.
+
+=== Example
+
+Suppose you have a node running a project called "my-project" that consists of 3 pods (named "web-pod", "app-pod", and "db-pod"). Suppose you do not want Hawkular OpenShift Agent to monitor the "db-pod" but you do want it to monitor the other two pods in your project.
+
+First create two config maps on your "my-project" that each contain a config map entry that indicate what you want to monitor on your two pods. One way you can do this is create a YAML file that represents your config maps and via the "oc" OpenShift command line tool create the config maps. A sample YAML configuration for the web-pod config map could look like this (the schema of this YAML will change in the future, this is just an example).
+
+[source,yaml]
+----
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: my-web-pod-config
+  namespace: my-project
+data:
+  hawkular-openshift-agent: |
+    endpoints:
+    - type: prometheus
+      collection_interval: 60s
+      protocol: http
+      port: 8080
+      path: /metrics
+      metrics:
+      - name: the_metric_to_collect
+----
+
+Notice the name given to this config map - "my-web-pod-config". This is the name of the config map, and it is this name that should appear as a value to the "hawkular-openshift-agent" volume found on the "web-pod" pod. It identifies this config map to Hawkular OpenShift Agent as the one that should be used by that pod. Notice also that the name of the config map entry is fixed and must always be "hawkular-openshift-agent". Next, notice the config map entry here. This defines what are to be monitored. Here you see there is a single endpoint for this pod that will expose Prometheus metrics over http and port 8080 at /metrics. The IP address used will be that of the pod itself and thus need not be specified. Note, too, that you can specify which metrics should be collected. Metric names (such as the example above "the_metric_to_collect") tells the agent that the metric with that given name should be collected and any others are to be ignored (not collected). Metric names can include pod token expressions such as `${POD:namespace_name}` - see below for the list of valid pod token expressions.
+
+To create this config map, save that YAML to a file and use "oc":
+
+[source,shell]
+----
+oc create -f my-web-pod-config-map.yaml
+----
+
+If you have already created a "my-web-pod-config" config map on your project, you can update it via the "oc replace" command:
+
+[source,shell]
+----
+oc replace -f my-web-pod-config-map.yaml
+----
+
+Now that the config map has been created on your project, you can now add the volumes to the pods that you want to be monitored with the information in that config map. Let's tell Hawkular OpenShift Agent to monitor pod "web-pod" using the configuration named "my-web-pod-config" found in the config map we just created above. We could do something similar for the app-pod (that is, create a config map named, say, "my-app-pod-config" and create a volume on the app-pod to point to that config map). You do this by editing your pod configuration and redeploying your pod.
+
+[source,yaml]
+----
+...
+spec:
+  volumes:
+    - name: hawkular-openshift-agent
+      configMap:
+        name: my-web-pod-config
+...
+----
+
+Because we do not want to monitor the db-pod, we do not create a volume for it. This tells Hawkular OpenShift Agent to ignore that pod.
+
+If you want Hawkular OpenShift Agent to stop monitoring a pod, it is as simple as removing the pod's "hawkular-openshift-agent" volume but you will need to redeploy the pod. Alternatively, if you do not want to destroy and recreate your pod, you can edit your config map and add the setting "enabled: false" to all the endpoints declared in the config map.
+
+=== Try It!
+
+There is a example Docker image you can deploy in your OpenShift environment to see this all work together. The example Docker image will provide you with a WildFly application server that has a Jolokia endpoint installed. You can configure the agent to collect metrics from that Jolokia-enabld WildFly application server such as the "ThreadCount" metric from the MBean "java.lang:type=Threading" and the "used" metric from the composite "HeapMemoryUsage" attribute from the MBean "java.lang:type=Memory".
+
+Assuming you already have your OpenShift environment up and running and you have the Hawkular OpenShift Agent deployed within that OpenShift environment, you can use the link:examples/jolokia-wildfly-example/Makefile[example Jolokia Makefile] to deploy this Jolokia-enabled WildFly application server into your OpenShift environment.
+
+[source,shell]
+----
+cd ${GOPATH}/src/github.com/hawkular/hawkular-openshift-agent/examples/jolokia-wildfly-example
+make openshift-deploy
+----
+
+[NOTE]
+====
+You must log into OpenShift via `oc login` before running the Makefile to deploy the example. If you wish to deploy the example in a different project than your OpenShift user's default project, use `oc project` to switch to the project prior to running `make openshift-deploy`.
+====
+
+Once the Makefile finishes deploying the example, within moments the agent will begin collecting metrics and storing them to the Hawkular Metrics server. You can go to the OpenShift console and edit the config map to try things like adding new metric definitions, adding tags to the metrics, and changing the collection interval.
+
+== Configuring External Endpoints To Monitor
+
+Hawkular OpenShift Agent is being developed primarily for running within an OpenShift environment. However, strictly speaking, it does not need to run in or monitor OpenShift. You can run Hawkular OpenShift Agent within your own VM, container, or bare metal and configure it to collect metrics from external endpoints you define in the main config.yaml configuration file.
+
+As an example, suppose you want Hawkular OpenShift Agent to scrape metrics from your Prometheus endpoint running at "http://yourcorp.com:9090/metrics" and store those metrics in Hawkular Metrics. You can add an `endpoints` section to your Hawkular OpenShift Agent's configuration file pointing to that endpoint which enables Hawkular OpenShift Agent to begin monitoring that endpoint as soon as Hawkular OpenShift Agent starts. The `endpoints` section of your YAML configuration file could look like this:
+
+[source,yaml]
+----
+endpoints:
+- type: "prometheus"
+  url: "http://yourcorp.com:9090/metrics"
+  collection_interval: 5m
+----
+
+== Prometheus Endpoints
+
+A full Prometheus endpoint configuration can look like this:
+
+[source,yaml]
+----
+- type: prometheus
+  # If this is an endpoint within an OpenShift pod:
+  protocol: https
+  port: 9090
+  path: /metrics
+  # If this is an endpoint running outside of OpenShift:
+  #url: "https://yourcorp.com:9090/metrics"
+  credentials:
+    token: your-bearer-token-here
+    #username: your-user
+    #password: secret:my-openshift-secret-name/your-pass
+  collection_interval: 1m
+  metrics:
+  - name: go_memstats_last_gc_time_seconds
+    id: gc_time_secs
+  - name: go_memstats_frees_total
+----
+
+Some things to note about configuring your Prometheus endpoints:
+
+* Prometheus endpoints can serve metric data in either text or binary form. The agent automatically supports both - there is no special configuration needed. The agent will detect what form the data is in when the endpoint returns it and parses the data accordingly.
+* If this is an endpoint running in an OpenShift pod (and thus this endpoint configuration is found in a config map), you do not specify a full URL; instead you specify the protocol, port, and path and the pod's IP will be used for the hostname. URLs are only specified for those endpoints running outside of OpenShift.
+* The agent supports either http or https endpoints. If the Prometheus endpoint is over the https protocol, you must configure
+the agent with a certificate and private key. This is done by either starting the agent with the two environment variables `HAWKULAR_OPENSHIFT_AGENT_CERT_FILE` and `HAWKULAR_OPENSHIFT_AGENT_PRIVATE_KEY_FILE` or via the Identity section of the agent's configuration file:
+[source,yaml]
+----
+identity:
+  cert_file: /path/to/file.crt
+  private_key_file: /path/to/file.key
+----
+* The credentials are optional. If the Prometheus endpoint does require authorization, you can specify the credentials as either a bearer token or a basic username/password. To avoid putting this information in plaintext you can specify an OpenShift secret name that the agent will use to obtain the credentials (e.g. a password value can be "secret:my-secret/password" which tells the agent to look up the password in the "password" entry found within the OpenShift secret named "my-secret").
+* A metric "id" is used when storing the metric to Hawkular Metrics. If you do not specify an "id" for a metric, its "name" will be used as the default. This metric ID will be prefixed with the "metric_id_prefix" if one is defined in the `collector` section of the agent's global configuration file.
+
+Prometheus supports the ability to https://prometheus.io/docs/practices/naming/#labels[label] metrics such as the below:
+
+----
+# HELP jvm_memory_pool_bytes_committed Limit (bytes) of a given JVM memory pool.
+# TYPE jvm_memory_pool_bytes_committed gauge
+jvm_memory_pool_bytes_committed{pool="Code Cache",} 2.7787264E7
+jvm_memory_pool_bytes_committed{pool="Metaspace",} 5.697536E7
+jvm_memory_pool_bytes_committed{pool="Compressed Class Space",} 7471104.0
+jvm_memory_pool_bytes_committed{pool="PS Eden Space",} 2.3068672E7
+jvm_memory_pool_bytes_committed{pool="PS Survivor Space",} 524288.0
+jvm_memory_pool_bytes_committed{pool="PS Old Gen",} 4.8758784E7
+----
+
+To Prometheus, each metric with a unique combination of labels is separate time series data. To define separate time series data in Hawkular-Metrics, the agent will create a separate metric definition per label combination. By default, if the agent sees Prometheus data with labels, it will create metric definitions in the format:
+
+```
+metric_name{labelName1=labelValue1,labelName2=labelValue2,...}
+```
+You can customize these metric definitions that are created by using ${label-key} tokens in a custom metric ID per the below:
+
+----
+metrics:
+- name: jvm_memory_pool_bytes_committed
+  id: jvm_memory_pool_bytes_committed_${pool}
+----
+
+This would create the following metrics in Hawkular:
+
+----
+jvm_memory_pool_bytes_committed_Code Cache = 2.7787264E7
+jvm_memory_pool_bytes_committed_Metaspace = 5.697536E7
+jvm_memory_pool_bytes_committed_Compressed Class Space = 7471104.0
+jvm_memory_pool_bytes_committed_PS Eden Space = 2.3068672E7
+jvm_memory_pool_bytes_committed_PS Survivor Space = 524288.0
+jvm_memory_pool_bytes_committed_PS Old Gen = 4.8758784E7
+----
+
+== Jolokia Endpoints
+
+A full Jolokia endpoint configuration can look like this:
+
+[source,yaml]
+----
+- type: jolokia
+  # If this is an endpoint within an OpenShift pod:
+  protocol: https
+  port: 8080
+  path: /jolokia
+  # If this is an endpoint running outside of OpenShift:
+  #url: "https://yourcorp.com:8080/jolokia"
+  credentials:
+    token: your-bearer-token-here
+    #username: your-user
+    #password: secret:my-openshift-secret-name/your-pass
+  collection_interval: 60s
+  metrics:
+  - name: java.lang:type=Threading#ThreadCount
+    type: counter
+    id:   VM Thread Count
+  - name: java.lang:type=Memory#HeapMemoryUsage#used
+    type: gauge
+    id:   VM Heap Memory Used
+----
+
+Some things to note about configuring your Jolokia endpoints:
+
+* If this is an endpoint running in an OpenShift pod (and thus this endpoint configuration is found in a config map), you do not specify a full URL; instead you specify the protocol, port, and path and the pod's IP will be used for the hostname. URLs are only specified for those endpoints running outside of OpenShift.
+* The agent supports either http or https endpoints. If the Jolokia endpoint is over the https protocol, you must configure
+the agent with a certificate and private key. This is done by either starting the agent with the two environment variables `HAWKULAR_OPENSHIFT_AGENT_CERT_FILE` and `HAWKULAR_OPENSHIFT_AGENT_PRIVATE_KEY_FILE` or via the Identity section of the agent's configuration file:
+[source,yaml]
+----
+identity:
+  cert_file: /path/to/file.crt
+  private_key_file: /path/to/file.key
+----
+* The credentials are optional. If the Jolokia endpoint does require authorization, you can specify the credentials as either a bearer token or a basic username/password. To avoid putting this information in plaintext you can specify an OpenShift secret name that the agent will use to obtain the credentials (e.g. a password value can be "secret:my-secret/password" which tells the agent to look up the password in the "password" entry found within the OpenShift secret named "my-secret").
+* A metric "id" is used when storing the metric to Hawkular Metrics. If you do not specify an "id" for a metric, its "name" will be used as the default.
+* You must specify a metric's "type" as either "counter" or "gauge".
+* A metric "id" is used when storing the metric to Hawkular Metrics. If you do not specify an "id" for a metric, its "name" will be used as the default. This metric ID will be prefixed with the "metric_id_prefix" if one is defined in the `collector` section of the agent's global configuration file.
+* A metric "name" follows a strict format. First is the full MBean name (e.g. `java.lang:type=Threading`) followed by a hash (#) followed by the attribute that contains the metric data (e.g. `ThreadCount`). If the attribute is a composite attribute, then you must append a second hash followed by the composite attribute's subpath name which contains the actual metric value. For example, `java.lang:type=Memory#HeapMemoryUsage#used` will collect the `used` value of the composite attribute `HeapMemoryUsage` from the MBean `java.lang:type=Memory`.
+* An attribute must be a numeric value convertible to a floating point number. However, if the value is such a numeric in the form of a string, the agent will parse the attribute value string and convert it to a floating point number for storage. Also, if the value is a boolean, it will be converted to a 1.0 if the boolean value is true and a 0.0 if the boolean value is false.
+
+Jolokia allows for querying of multiple MBeans and multiple attributes using JMX ObjectName patterns. The Hawkular OpenShift Agent can take advantage of this to allow for easier configuration of the metrics you want to collect from your Jolokia endpoints. Here are some of the scenarios that the agent supports.
+
+* Collect an attribute from multiple MBeans. This will collect the "Count" attribute from all MBeans that match the query in "name":
+
+```
+metrics:
+- name: my.domain:type=MyApp,component=*#Count
+  id: bean.${component}.count
+  description: Count of my bean ${component}
+```
+
+Note that in your metric ID and description you can use ${x} tokens where the "x" is the MBean name key that was set to the "*" wildcard in the name. You can have multiple wildcards in your metric name such as:
+
+```
+metrics:
+- name: my.domain:type=MyApp,component=*,subcomponent=*#Count
+  id: sub.${subcomponent}.bean.${component}.count
+  description: Count of the ${subcomponent} of bean ${component}
+```
+
+* Collect multiple attributes from a single MBean. This will collect all attributes from the named MBean:
+
+```
+metrics:
+- name: my.domain:type=MyApp#*
+  id: my.app.metric.${1}
+  description: My App Metric ${1}
+```
+
+Note that when the attribute is a wildcard, you can use the ${1} token in the ID where you want the name of the attribute in the metric ID. The same with description.
+
+* Collect all data from a composite attribute from a single MBean. This will collect all data for the named composite attribute from the named MBean:
+
+```
+metrics:
+- name: java.lang:type=Memory#HeapMemoryUsage#*
+  id: heap.usage.${2}
+  description: Heap Memory Usage ${2}
+```
+
+Note that when the inner path of a composite attribute is a wildcard, you can use the ${2} token in the ID where you want the name of the inner path of the composite attribute in the metric ID. The same with description.
+
+* Collect multiple attributes from multiple MBeans:
+
+```
+metrics:
+- name: my.domain:type=MyApp,component=*,subcomponent=*#*
+  id: ${1} of the ${subcomponent} of bean ${component}
+```
+
+== Generic JSON Endpoints
+
+Hawkular OpenShift Agent has the ability to read any endpoint that exposes metrics in JSON format. So long as the endpoint serves a valid JSON document, the agent can scrape the metrics from that JSON data. One common use-case for this is GoLang's `expvar` feature. A GoLang program can expose its metric data over HTTP in JSON format via expvar (see the link:https://golang.org/pkg/expvar/[GoLang expvar documentation] for more details) - the agent can read this GoLang expvar endpoint to obtain that metric data. A full JSON endpoint configuration can look like this:
+
+[source,yaml]
+----
+- type: json
+  # If this is an endpoint within an OpenShift pod:
+  protocol: https
+  port: 8080
+  path: /debug/vars
+  # If this is an endpoint running outside of OpenShift:
+  #url: "https://yourcorp.com:8080/debug/vars"
+  credentials:
+    token: your-bearer-token-here
+    #username: your-user
+    #password: secret:my-openshift-secret-name/password
+  collection_interval: 60s
+  metrics:
+  - name: loop-counter
+    type: counter
+    description: The number of times the loop was executed.
+----
+
+Some things to note about configuring your JSON endpoints:
+
+* If this is an endpoint running in an OpenShift pod (and thus this endpoint configuration is found in a config map), you do not specify a full URL; instead you specify the protocol, port, and path and the pod's IP will be used for the hostname. URLs are only specified for those endpoints running outside of OpenShift.
+* The agent supports either http or https endpoints. If the JSON endpoint is over the https protocol, you must configure
+the agent with a certificate and private key. This is done by either starting the agent with the two environment variables `HAWKULAR_OPENSHIFT_AGENT_CERT_FILE` and `HAWKULAR_OPENSHIFT_AGENT_PRIVATE_KEY_FILE` or via the Identity section of the agent's configuration file:
+[source,yaml]
+----
+identity:
+  cert_file: /path/to/file.crt
+  private_key_file: /path/to/file.key
+----
+* The credentials are optional. If the JSON endpoint does require authorization, you can specify the credentials as either a bearer token or a basic username/password. To avoid putting this information in plaintext you can specify an OpenShift secret name that the agent will use to obtain the credentials (e.g. a password value can be "secret:my-secret/password" which tells the agent to look up the password in the "password" entry found within the OpenShift secret named "my-secret").
+* If no metrics are specified, all valid metrics in the JSON data will be collected.
+* A metric "id" is used when storing the metric to Hawkular Metrics. If you do not specify an "id" for a metric, its "name" will be used as the default with labels appended to it (see more below).
+* You must specify a metric's "type" as either "counter" or "gauge".
+* A metric "id" is used when storing the metric to Hawkular Metrics. If you do not specify an "id" for a metric, its "name" will be used as the default. This metric ID will be prefixed with the "metric_id_prefix" if one is defined in the `collector` section of the agent's global configuration file.
+* A metric "name" is the name of the top-level JSON element.
+
+The JSON data can include sub-elements under the named top-level elements. In this case, the sub-element names will be used as tags and appended to the metric name enclosed in curly braces. The agent can support maps nested at any level. An example is the best way to illustrate this. Suppose the JSON metric data representing a web application's average response times looks like this:
+
+[source,json]
+----
+{
+   "response.times":
+   {
+      "GET":
+      {
+         "/index.html":9.7,
+         "/store/browse.jsp?product=123":1.3
+      },
+      "POST":
+      {
+         "/admin/query-db":2.1,
+         "/store/buy.jsp#cart":4.0
+      }
+   }
+}
+----
+
+The metric names are always found at the top-level of the JSON data. So in this example, the metric being collected has the base metric name "response.times". 
+
+But notice this data has a map sub-element under the top element indicating this "metric" is really a collection of related metrics (for those familiar with Prometheus, we can call this the "metric family name"). This map has two entries with key names "GET" and "POST". Under each of these are more maps, each keyed with a web application request path (e.g. "/index.html" or "/admin/query-db") whose values are the actual numeric metric data - the average response time for each requested endpoint.
+
+The Hawkular OpenShift Agent will be able to collect and store this family of metrics named "response.times". It reads the child map entries and considers each map key a label value which will be appended to the metric name to build the metric ID and will be used as a tag on the metric when storing in Hawkular Metrics. The agent recursively decends the JSON tree building new labels until it reaches the numeric metric data.
+
+For this example, the agent will end up storing in Hawkular Metrics the following four individual metrics:
+
+[cols="1,1,2a"]
+|===
+|Metric ID|Metric Value|Tags
+
+|response.times{label1=GET,label2=/index.html"}
+|9.7
+|* label1=GET1
+ * label2=/index.html
+
+|response.times{label1=GET,label2=/store/browse.jsp?product=123"}
+|1.3
+|* label1=GET
+ * label2=/store/browse.jsp?product=123
+
+|response.times{label1=POST,label2=/admin/query-db"}
+|2.1
+|* label1=POST
+ * label2=/admin/query-db
+
+|response.times{label1=POST,label2=/store/buy.jsp#cart"}
+|4.0
+|* label1=POST
+ * label2=/store/buy.jsp#cart
+
+|===
+
+== Environment Variables
+
+Many of the agent's configuration settings can optionally be set via environment variables. If one of the environment variables below are set, they serve as the default value for its associated YAML configuration setting. The following are currently supported:
+
+[cols="1a,1a"]
+|===
+|Environment Variable Name|Description and YAML Setting
+
+|`HAWKULAR_SERVER_URL`
+|This is the Hawkuar Metrics server where all metric data will be stored
+[source,yaml]
+----
+hawkular_server:
+  url: VALUE
+----
+
+|`HAWKULAR_SERVER_TENANT`
+|The default tenant ID to be used if external endpoints do not define their own. Note that OpenShift endpoints always have a tenant which is the same as its pod namespace and thus this setting is not used in that case.
+[source,yaml]
+----
+hawkular_server:
+  tenant: VALUE
+----
+
+|`HAWKULAR_SERVER_CA_CERT_FILE`
+|File that contains the certificate that is required to connect to Hawkular Metrics
+[source,yaml]
+----
+hawkular_server:
+  ca_cert_file: VALUE
+----
+
+|`HAWKULAR_SERVER_USERNAME`
+|Username used when connecting to Hawkular Metrics. Can use OpenShift secrets via the "secret:" prefix.
+[source,yaml]
+----
+hawkular_server:
+  credentials:
+    username: VALUE
+----
+
+|`HAWKULAR_SERVER_PASSWORD`
+|Password used when connecting to Hawkular Metrics. Can use OpenShift secrets via the "secret:" prefix.
+[source,yaml]
+----
+hawkular_server:
+  credentials:
+    password: VALUE
+----
+
+|`HAWKULAR_SERVER_TOKEN`
+|Bearer token used when connecting to Hawkular Metrics. If specified, username and password are ignored. Can use OpenShift secrets via the "secret:" prefix.
+[source,yaml]
+----
+hawkular_server:
+  credentials:
+    token: VALUE
+----
+
+|`HAWKULAR_OPENSHIFT_AGENT_CERT_FILE`
+|File that contains the certificate that identifies this agent.
+[source,yaml]
+----
+identity:
+  cert_file: VALUE
+----
+
+|`HAWKULAR_OPENSHIFT_AGENT_PRIVATE_KEY_FILE`
+|File that contains the private key that identifies this agent.
+[source,yaml]
+----
+identity:
+  private_key_file: VALUE
+----
+
+|`K8S_MASTER_URL`
+|The location of the OpenShift master. If left blank, it is assumed this agent is running within OpenShift and thus does not need a URL to connect to the master.
+[source,yaml]
+----
+kubernetes:
+  master_url: VALUE
+----
+
+|`K8S_POD_NAMESPACE`
+|The namespace of the pod where this agent is running. If this is left blank, it is assumed this agent is not running within OpenShift.
+[source,yaml]
+----
+kubernetes:
+  pod_namespace: VALUE
+----
+
+|`K8S_POD_NAME`
+|The name of the pod where this agent is running. Only required if the agent is running within OpenShift.
+[source,yaml]
+----
+kubernetes:
+  pod_name: VALUE
+----
+
+|`K8S_TOKEN`
+|The bearer token required to connect to the OpenShift master.
+[source,yaml]
+----
+kubernetes:
+  token: VALUE
+----
+
+|`K8S_CA_CERT_FILE`
+|File that contains the certificate required to connect to the OpenShift master.
+[source,yaml]
+----
+kubernetes:
+  ca_cert_file: VALUE
+----
+
+|`K8S_TENANT`
+|If defined, this will be the tenant where all pod metrics are stored. If not defined, the default is the tenant specified in the Hawkular_Server section. If defined, may include ${var} tokens where `var` is either an agent environment variable of one of the valid POD tag tokens such as `POD:namespace_name`.
+[source,yaml]
+----
+kubernetes:
+  tenant: VALUE
+----
+
+|`COLLECTOR_MAX_METRICS_PER_POD`
+|Restricts the number of metrics that will be stored for each pod being monitored.
+[source,yaml]
+----
+collector:
+  max_metrics_per_pod: VALUE
+----
+
+|`COLLECTOR_MINIMUM_COLLECTION_INTERVAL`
+|Limits the fastest that any endpoint can have its metrics collected. If an endpoint defines its collection interval smaller than this value, that endpoint's collection interval will be set to this minimum value. Specified as a number followed by units such as "30s" for thirty seconds or "2m" for two minutes.
+[source,yaml]
+----
+collector:
+  minimum_collection_interval: VALUE
+----
+
+|`COLLECTOR_DEFAULT_COLLECTION_INTERVAL`
+|The default collection interval for those endpoints that do not explicitly define its own collection interval. Specified as a number followed by units such as "30s" for thirty seconds or "2m" for two minutes.
+[source,yaml]
+----
+collector:
+  default_collection_interval: VALUE
+----
+
+|`COLLECTOR_POD_LABEL_TAGS_PREFIX`
+| Pods might have one or more labels (name/value pairs). You can tag each metric with these pod labels if "pod_label_tags_prefix" is not an empty string. If it is an empty string or not specified, these tags will not be created. When not an empty string, for each label on a pod a tag will be placed on each pod metric with this string prefixing the pod label name. For example, if the prefix string is `labels.` and a pod has a label `something=foo` then that pod's metrics will have a tag named `labels.something` with value of `foo`. If you wish to create these tags with no prefix (that is, you want the tag names to be exactly the same as the label names) set the prefix value to `\_empty_`.
+[source,yaml]
+----
+collector:
+  pod_label_tags_prefix: VALUE
+----
+
+|`EMITTER_ADDRESS`
+|If the emitter endpoint is to be enabled, this is the bind address and port. If address is not specified, it will be an IP of the host machine. If not specified at all, this will be either ":8080" if the agent's identity is not declared and ":8443" if the agent's identity is declared. Note that if the agent's identity is declared, the endpoint will be exposed over https, otherwise http is used. If neither metrics, status, or health emitters are enabled, this setting is not used and no http(s) endpoint is created by the agent.
+[source,yaml]
+----
+emitter:
+  address: [address]:port
+----
+
+|`EMITTER_METRICS_ENABLED`
+|If true, the agent's own metrics are emitted at the /metrics endpoint.
+[source,yaml]
+----
+emitter:
+  metrics_enabled: (true\|false)
+----
+
+|`EMITTER_STATUS_ENABLED`
+|If enabled the status is emitted at the /status endpoint. This is useful to admins and developers to see internal details about the agent. Use the status credentials settings to secure this endpoint via basic authentication.
+[source,yaml]
+----
+emitter:
+  status_enabled: (true\|false)
+----
+
+|`EMITTER_HEALTH_ENABLED`
+|If true, a simple health endpoint is emitted at /health endpoint. This is useful for health probes to check the health of the agent.
+[source,yaml]
+----
+emitter:
+  health_enabled: (true\|false)
+----
+
+|`EMITTER_METRICS_CREDENTIALS_USERNAME`
+|If the metrics emitter is enabled, you can set this username (along with the password) to force users to authenticate themselves in order to see the metrics information.
+[source,yaml]
+----
+emitter:
+  metrics_credentials:
+    username: VALUE
+----
+
+|`EMITTER_METRICS_CREDENTIALS_PASSWORD`
+|If the metrics emitter is enabled, you can set this password (along with the username) to force users to authenticate themselves in order to see the metrics information.
+[source,yaml]
+----
+emitter:
+  metrics_credentials:
+    password: VALUE
+----
+
+|`EMITTER_STATUS_LOG_SIZE`
+|The status endpoint emits important log messages. Set this value to limit the size of the log.
+[source,yaml]
+----
+emitter:
+  status_log_size: VALUE
+----
+
+|`EMITTER_STATUS_CREDENTIALS_USERNAME`
+|If the status emitter is enabled, you can set this username (along with the password) to force users to authenticate themselves in order to see the status information.
+[source,yaml]
+----
+emitter:
+  status_credentials:
+    username: VALUE
+----
+
+|`EMITTER_STATUS_CREDENTIALS_PASSWORD`
+|If the status emitter is enabled, you can set this password (along with the username) to force users to authenticate themselves in order to see the status information.
+[source,yaml]
+----
+emitter:
+  status_credentials:
+    password: VALUE
+----
+|===
+
+== Metric Tags
+
+Metric data can be tagged with additional metadata called _tags_. A metric tag is a simple name/value pair. Tagging metrics allows you to further describe the metric and allows you to query for metric data based on tag queries. For more information on tags and querying tagged metric data, see the Hawkular-Metrics documentation.
+
+Hawkular OpenShift Agent can be configured to attach custom tags to the metrics it collects. There are three places where you can define custom tags in Hawkular OpenShift Agent:
+
+* In the agent's global configuration (all tags defined here will be attached to all metrics stored by the agent)
+* In an endpoint configuration (all tags defined here will be attached to all metrics collected from that endpoint)
+* In a metric configuration (all tags defined here will only be attached to the metric)
+
+To define global tags, you would add a `tags` section under `collector` in the agent's global configuration file. The following configuration snippet will tell the agent to attach the tags "my-tag" (with value "my-tag-value") and "another-tag" (with value "another-tag-value") to each and every metric the agent collects.
+
+[source,yaml]
+----
+collector:
+  tags:
+  - my-tag: my-tag-value
+  - another-tag: another-tag-value
+----
+
+To define endpoint tags (that is, tags that will be attached to every metric collected from the endpoint), you would add a `tags` section within the endpoint configuration. The following configuration snippet will tell the agent to attach the tags "my-endpoint-tag" and "my-other-endpoint-tag" to every metric that is collected from this specific Jolokia endpoint:
+
+[source,yaml]
+----
+endpoints:
+- type: jolokia
+  tags:
+    my-endpoint-tag: the-endpoint-tag-value
+    my-other-endpoint-tag: the-endpoint-tag-value
+----
+
+To define tags on individual metrics, you would add a `tags` section within a metric configuration. The following configuration snippet will tell the agent to attach the tags "my-metric-tag" and "my-other-metric-tag" to the metric named "java.lang.type=Threading#ThreadCount" that is collected from this specific Jolokia endpoint:
+
+[source,yaml]
+----
+endpoints:
+- type: jolokia
+  metrics:
+  - name: java.lang.type=Threading#ThreadCount
+    type: gauge
+    tags:
+      my-metric-tag: the-metric-tag-value
+      my-other-metric-tag: the-metric-tag-value
+----
+
+Tag values can be defined with token expressions in the form of `${var}` or `$var` where _var_ is either an agent environment variable name (only supported in global tags) or, if the tag definition is found in an OpenShift config map entry, one of the following:
+
+[cols="1,1a"]
+|===
+|Token Name|Description
+
+|POD:node_name
+|The name of the node where the metric was collected from.
+
+|POD:node_uid
+|The unique ID of the node where the metric was collected from.
+
+|POD:namespace_name
+|The name of the namespace of the pod where the metric was collected from.
+
+|POD:namespace_uid
+|The unique ID of the namespace of the pod where the metric was collected from.
+
+|POD:name
+|The name of the pod where the metric was collected from.
+
+|POD:uid
+|The UID of the pod where the metric was collected from.
+
+|POD:ip
+|The IP address allocated to the pod where the metric was collected from.
+
+|POD:host_ip
+|The IP address of the host to which the pod is assigned.
+
+|POD:hostname
+|The hostname of the host to which the pod is assigned.
+
+|POD:subdomain
+|The subdomain of the host to which the pod is assigned.
+
+|POD:labels
+|The Pod labels concatenated in a single string separated by commas, e.g. `label1:value1,label2:value2,...`
+
+|POD:label[_key_]
+|A single Pod label value for the label key _key_
+
+|POD:cluster_name
+|The name of the cluster that the pod is a member of.
+
+|POD:resource_version
+|The resource version of the Pod resource.
+
+|POD:self_link
+|The link to the Pod resource itself.
+
+|METRIC:name
+|The name of the metric on which this tag is found.
+
+|METRIC:id
+|The id of the metric on which this tag is found.
+
+|METRIC:units
+|The units of measurement for the metric data if applicable. This will be things like 'ms', 'GB', etc. This can be determined from the endpoint itself (if available) or defined within the YAML metric declaration.
+
+|METRIC:description
+|Describes the metric on which this tag is found. This can be determined from the endpoint itself (if available) or defined within the YAML metric declaration.
+|===
+
+For example:
+
+[source,yaml]
+----
+tags:
+  my-pod-name: ${POD:name}
+  some-env-tag: var is ${SOME_ENV_VAR}
+----
+
+=== Pod Label Tags
+
+There is a setting in the `collector` section of the agent global configuration called `pod_label_tags_prefix` that also enables the creation of metric tags. When specified and not an empty string, this enables pod label tags to be created. This means every metric from every pod will get one tag per pod label with the name of the tag that of the pod label prefixed with the string defined in this `pod_label_tags_prefix` setting. If you wish to create these tags with no prefix (that is, you want the tag names to be exactly the same as the label names) set the prefix value to `\_empty_`.
+
+For example, if the agent global configuration has this:
+
+[source,yaml]
+----
+collector:
+  pod_label_tags_prefix: labels.
+----
+
+and a pod has a label `something=foo` then that pod's metrics will have a tag named `labels.something` with a value of `foo`. If the prefix string was set to `\_empty_`, the tag will be named the same as the label name which in this example is `something`.

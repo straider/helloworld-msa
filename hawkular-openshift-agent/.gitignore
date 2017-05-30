@@ -1,0 +1,44 @@
+# The compliled Hawkular OpenShift Agent binary
+hawkular-openshift-agent
+
+# Files specific to our build process
+_output
+
+# Swap files
+.*.sw*
+
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.so
+
+# Folders
+_obj
+_test
+
+# Architecture specific extensions/prefixes
+*.[568vq]
+[568vq].out
+
+*.cgo1.go
+*.cgo2.c
+_cgo_defun.c
+_cgo_gotypes.go
+_cgo_export.*
+
+_testmain.go
+
+*.exe
+*.test
+*.prof
+
+# Eclipse
+.project
+.settings/
+
+# IntelliJ
+.idea/
+
+# Go vendor directory
+# Due to the way the agent is to be productized, the vendor directory is to be committed to the git repo
+#vendor/

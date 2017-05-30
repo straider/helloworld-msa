@@ -1,0 +1,62 @@
+sudo: required
+
+services:
+  - docker
+
+language: go
+
+go:
+  - 1.7.5
+
+notifications:
+  irc:
+    channels:
+    - chat.freenode.net#hawkular
+
+env:
+  global:
+    - secure: "tZbmG2N4MwhDpca88sA5JaCpWvRan8LlL6Wb+TEZ6FD5Nys1vs4AD2SNTfrJkmgT7hLrbdaQ/kvb9ewT/iZhZF38ymv2F3bM+hcW+FLhT7onsJJXLz2DkXEF97eX7AEL1Y8303yp4gBVy2HoeeH0s/td3dkRm4Q1L/pzS0heNUFbi2OaBC4GrhwUlhynzginrhOJCmk4JX08A2to5MvC3G2lpkeMov3ga6ZInxapd6SFD/xpzAzTNmndORZNADJnggBzRDYdE/M5pNyQTvn3QrWDz71Kp+F6fhcbCk6yKz/JX4BrurnDlUAYkIcBh17625KSPHgDbksCAr7RHc4UT9uhsJexwvykjUGbRU3PsjEk+GRr2FfDUjJ1/+0GH5DgtsOBUqx1+39yWrib4tAYtUGysaXcBdxCoQlXq07Knntaop3POYzsuD82QfsflQ3GSa22G1ZaVWGjDqYPOm2R7INrB/Sk+ERV07saKZ3y/iH/oaSo7vlVDR4ThWoCDocPGliqIAahNaLoj0oCV/yiH4c91GSNzXMvz/XDglq42/IBdIt4BLEINy0NPf4nEerUPg1WdosyZ6OYmbEak/A+syKQVwrSS23Nmes3xGVsDRMlUkYC173vPWnMt34cqfwAo6DN+sVLz3+F3BzHZt/VF00ao6O0uKR3gXwB9BPjbyY="
+    - secure: "Ws+X9QhpzWl+0JE23FMX5jvUSwxxwmOIpcQQU9gi5CBKkFft9vF7FIeGMm5Vypi+8bkFB+C29hU0sjOLRoM8B7Wrox6o6zvPrcL1DjwOGRbWiqbUd2TQWAbkcRsyRGOfPblVTpXaX3STD0oSXZQcySkW+5l7FlpxhmLPnleuv9Z1CsV39DNqb7DI1npp082l6VzzHISz5l9GZPLyNn5tSO8ZiZzeUFS9FTdRF31wooo7DpvoeiJ4sixPKe/Vx8FvdwhLsNkYpfJ/flkNvvfJF5HTyS7GLIhEo1pQ72OnOwl9ipS6R1aIARIvPUMhYjrAllmtWhnEn0bnwUw6u/E6Gznk9ptOnXSuKOk0mCUq2+HD2Ay0R8E9odmo/nAfdkTfSqyb/10ArS5kAP/gG1WH9OojS3RcNYCcIGye7VLKIkrQen4IsrXXJF+BTgf+UdGXfLBuXYitRMX016IL21/qo6GiCSLXtv2cF2csj6iM/hXFeuDifTs0mWQ7hsesO2buKUnfDBpjtSElHa3IRe3lBibAue2lVzJQj6pwL8+gPgJ1ya+qA8htotNrPA753g7c0Fx1s6F1Rcx4FocsyVa2Qm3oUzmyTFb+/2ZuK7y6IQpcQoWC6G3jXxMHn4ZYdWFTGGS0TAagNoLMBThzotRUqYks7Ouv8FvZ5K2Q6cVv7+8="
+
+# Workaround issue https://github.com/Masterminds/glide/issues/639
+# Run this before_install and do not run "make install-glide" during the install.
+before_install:
+  - GLIDE_OS_ARCH=`go env GOHOSTOS`-`go env GOHOSTARCH`
+  - GLIDE_TAG=$(curl -s https://glide.sh/version)
+  - GLIDE_LATEST_RELEASE_URL="https://github.com/Masterminds/glide/releases/download/${GLIDE_TAG}/glide-${GLIDE_TAG}-${GLIDE_OS_ARCH}.tar.gz"
+  - wget ${GLIDE_LATEST_RELEASE_URL} -O /tmp/glide.tar.gz
+  - mkdir /tmp/glide
+  - tar --directory=/tmp/glide -xvf /tmp/glide.tar.gz
+  - export PATH=$PATH:/tmp/glide/${GLIDE_OS_ARCH}
+
+# Via Makefile, tell glide to install our dependencies, and then run the tests.
+install:
+#  - make install-glide
+  - make install-deps
+
+script: make test
+
+# Push the docker images to docker hub
+# If a tag build, use the tag as docker version; otherwise, use branch name as docker version (where master==latest)
+after_success:
+  - export COMMIT_HASH=${TRAVIS_COMMIT}
+  - export DOCKER_VERSION=$(if [ "$TRAVIS_TAG" != "" ]; then echo $TRAVIS_TAG; elif [ "$TRAVIS_BRANCH" == "master" ]; then echo "latest"; else echo $TRAVIS_BRANCH ; fi)
+  - export DOCKER_USER=$(if [ "$DOCKER_USER" == "" ]; then echo "unknown"; else echo $DOCKER_USER ; fi)
+  - export DOCKER_PASS=$(if [ "$DOCKER_PASS" == "" ]; then echo "unknown"; else echo $DOCKER_PASS ; fi)
+  - echo DOCKER_VERSION=$DOCKER_VERSION
+  - make build
+  - docker login -u "$DOCKER_USER" -p "$DOCKER_PASS"
+  - make docker
+  - make docker-examples
+  - docker push hawkular/hawkular-openshift-agent
+  - docker push hawkular/hawkular-openshift-agent-example-prometheus-python
+  - docker push hawkular/hawkular-openshift-agent-example-jolokia-wildfly
+  - docker push hawkular/hawkular-openshift-agent-example-multiple-endpoints
+  - docker push hawkular/hawkular-openshift-agent-example-go-expvar
+
+# Build only the master branch (for "latest" release) and version tags (e.g. "1.2.3" or "1.1.2.RC2" or "2.1.5.Final")
+# Add branch names below if we want to push docker images built off of those branches.
+branches:
+  only:
+  - master
+  - /^(\d+\.){2}(\d+){1}(\.[a-zA-Z\d]+)?$/
