@@ -8,23 +8,27 @@ oc project openshift-infra
 
 # Hawkular
 # https://github.com/openshift/origin-metrics
-oc create -f https://raw.githubusercontent.com/hawkular/hawkular-openshift-agent/master/deploy/openshift/hawkular-openshift-agent-configmap.yaml
-oc process -f https://raw.githubusercontent.com/hawkular/hawkular-openshift-agent/master/deploy/openshift/hawkular-openshift-agent.yaml IMAGE_VERSION=1.4.1.Final | oc create -f -
+pushd hawkular-openshift-agent/
+oc create -f deploy/openshift/hawkular-openshift-agent-configmap.yaml
+oc process -f deploy/openshift/hawkular-openshift-agent.yaml IMAGE_VERSION=1.4.1.Final | oc create -f -
 oc adm policy add-cluster-role-to-user hawkular-openshift-agent system:serviceaccount:default:hawkular-openshift-agent
+popd
 
 # Grafana
-oc process -f https://raw.githubusercontent.com/hawkular/hawkular-grafana-datasource/master/docker/openshift/openshift-template-persistent.yml | oc create -f -
-oc deploy hawkular-grafana
+pushd hawkular-grafana-datasource/
+oc process -f docker/openshift/openshift-template-persistent.yml | oc create -f -
+oc deploy hawkular-grafana --latest
+popd
 
 # Jaeger
-oc process -f https://raw.githubusercontent.com/jaegertracing/jaeger-openshift/0.1.1/all-in-one/jaeger-all-in-one-template.yml | oc create -f -
-# oc env dc -l app JAEGER_SERVER_HOSTNAME=jaeger-all-in-one
+pushd jaeger-openshift/
+oc process -f all-in-one/jaeger-all-in-one-template.yml | oc create -f -
+popd
 
 # Kubeflix
 oc process -f http://central.maven.org/maven2/io/fabric8/kubeflix/packages/kubeflix/1.0.17/kubeflix-1.0.17-kubernetes.yml | oc create -f -
 oc expose service hystrix-dashboard --port=8080
-
-----
+oc policy add-role-to-user admin system:serviceaccount:jc-central:turbine
 
 # Keycloak SSO
 # oc new-project helloworld-sso --display-name="HelloWorld Single Sign-On" --description="Red Hat Keycloak solution for an open source Identity and Access Management solution."
@@ -106,8 +110,8 @@ mvn package
 oc start-build namaste --from-dir=. --follow
 oc new-app namaste -l app=ola,hystrix.enabled=true
 oc expose service namaste
-oc env dc/namaste AB_ENABLED=jolokia
-oc patch dc/namaste -p '{"spec":{"template":{"spec":{"containers":[{"name":"namaste","ports":[{"containerPort": 8778,"name":"jolokia"}]}]}}}}'
+# oc env dc/namaste AB_ENABLED=jolokia
+# oc patch dc/namaste -p '{"spec":{"template":{"spec":{"containers":[{"name":"namaste","ports":[{"containerPort": 8778,"name":"jolokia"}]}]}}}}'
 oc set probe dc/namaste --readiness --get-url=http://:8080/api/health
 oc env dc/namaste KEYCLOAK_AUTH_SERVER_URL=http://keycloak-openshift-infra.rhel-cdk.10.1.2.2.xip.io/auth
 popd
