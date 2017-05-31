@@ -3,6 +3,7 @@ export JAVA_HOME=/c/DevKits/Java/openjdk-8u111-1/
 ----
 
 oc login https://10.1.2.2:8443 --username=admin --password=admin
+
 oc project openshift-infra
 
 # Hawkular
@@ -10,7 +11,6 @@ oc project openshift-infra
 oc create -f https://raw.githubusercontent.com/hawkular/hawkular-openshift-agent/master/deploy/openshift/hawkular-openshift-agent-configmap.yaml
 oc process -f https://raw.githubusercontent.com/hawkular/hawkular-openshift-agent/master/deploy/openshift/hawkular-openshift-agent.yaml IMAGE_VERSION=1.4.1.Final | oc create -f -
 oc adm policy add-cluster-role-to-user hawkular-openshift-agent system:serviceaccount:default:hawkular-openshift-agent
-oc policy add-role-to-user admin system:serviceaccount:openshift-infra:turbine
 
 # Grafana
 oc process -f https://raw.githubusercontent.com/hawkular/hawkular-grafana-datasource/master/docker/openshift/openshift-template-persistent.yml | oc create -f -
@@ -26,13 +26,8 @@ oc expose service hystrix-dashboard --port=8080
 
 ----
 
-# oc login https://10.1.2.2:8443 --username=openshift-dev --password=devel
-
 # Keycloak SSO
 # oc new-project helloworld-sso --display-name="HelloWorld Single Sign-On" --description="Red Hat Keycloak solution for an open source Identity and Access Management solution."
-# oc login https://10.1.2.2:8443 --username=admin --password=admin
-# oc adm policy add-scc-to-user anyuid -z default
-# oc login https://10.1.2.2:8443 --username=openshift-dev --password=devel
 # git clone https://github.com/redhat-helloworld-msa/sso
 pushd sso/
 oc new-build --binary --name keycloak
@@ -40,6 +35,8 @@ oc start-build keycloak --from-dir=. --follow
 oc new-app keycloak
 oc expose svc/keycloak
 oc set probe dc/keycloak --readiness --get-url=http://:8080/auth
+# oc policy add-role-to-user admin system:serviceaccount:helloworld-sso:turbine
+oc policy add-role-to-user admin system:serviceaccount:openshift-infra:turbine
 popd
 
 ----
@@ -47,7 +44,7 @@ popd
 oc login https://10.1.2.2:8443 --username=openshift-dev --password=devel
 
 # HelloWorld MSA
-oc new-project helloworld-msa --display-name="HelloWorld Microservices Architecture" --description="Playground with distinct “HelloWorld” microservices, built using different technologies, to allow developers to learn and explore."
+oc new-project jc-helloworld-msa --display-name="HelloWorld Microservices Architecture" --description="Playground with distinct “HelloWorld” microservices, built using different technologies, to allow developers to learn and explore."
 
 # bonjour (NodeJS) microservice
 # git clone https://github.com/redhat-helloworld-msa/bonjour
@@ -81,7 +78,8 @@ mvn package
 oc start-build aloha --from-dir=. --follow
 oc new-app aloha -l app=aloha,hystrix.enabled=true
 oc expose service aloha
-oc env dc/aloha AB_ENABLED=jolokia; oc patch dc/aloha -p '{"spec":{"template":{"spec":{"containers":[{"name":"aloha","ports":[{"containerPort": 8778,"name":"jolokia"}]}]}}}}'
+oc env dc/aloha AB_ENABLED=jolokia
+oc patch dc/aloha -p '{"spec":{"template":{"spec":{"containers":[{"name":"aloha","ports":[{"containerPort": 8778,"name":"jolokia"}]}]}}}}'
 oc set probe dc/aloha --readiness --get-url=http://:8080/api/health
 oc env dc/aloha KEYCLOAK_AUTH_SERVER_URL=http://keycloak-openshift-infra.rhel-cdk.10.1.2.2.xip.io/auth
 popd
@@ -94,9 +92,24 @@ mvn package
 oc start-build ola --from-dir=. --follow
 oc new-app ola -l app=ola,hystrix.enabled=true
 oc expose service ola
-oc env dc/ola AB_ENABLED=jolokia; oc patch dc/ola -p '{"spec":{"template":{"spec":{"containers":[{"name":"ola","ports":[{"containerPort": 8778,"name":"jolokia"}]}]}}}}'
+oc env dc/ola AB_ENABLED=jolokia
+oc patch dc/ola -p '{"spec":{"template":{"spec":{"containers":[{"name":"ola","ports":[{"containerPort": 8778,"name":"jolokia"}]}]}}}}'
 oc set probe dc/ola --readiness --get-url=http://:8080/api/health
 oc env dc/ola KEYCLOAK_AUTH_SERVER_URL=http://keycloak-openshift-infra.rhel-cdk.10.1.2.2.xip.io/auth
+popd
+
+# namaste (Dropwizard) microservice
+# git clone https://github.com/redhat-helloworld-msa/namaste
+pushd namaste/
+oc new-build --binary --name=namaste -l app=namaste
+mvn package
+oc start-build namaste --from-dir=. --follow
+oc new-app namaste -l app=ola,hystrix.enabled=true
+oc expose service namaste
+oc env dc/namaste AB_ENABLED=jolokia
+oc patch dc/namaste -p '{"spec":{"template":{"spec":{"containers":[{"name":"namaste","ports":[{"containerPort": 8778,"name":"jolokia"}]}]}}}}'
+oc set probe dc/namaste --readiness --get-url=http://:8080/api/health
+oc env dc/namaste KEYCLOAK_AUTH_SERVER_URL=http://keycloak-openshift-infra.rhel-cdk.10.1.2.2.xip.io/auth
 popd
 
 # api-gateway (Spring Boot)
