@@ -38,7 +38,7 @@ oc new-build --binary --name keycloak
 oc start-build keycloak --from-dir=. --follow
 oc new-app keycloak
 oc expose svc/keycloak
-oc set probe dc/keycloak --readiness --get-url=http://:8080/auth
+oc set probe dc/keycloak --readiness --failure-threshold 3 --initial-delay-seconds 30 --get-url=http://:8080/auth
 # oc policy add-role-to-user admin system:serviceaccount:helloworld-sso:turbine
 oc policy add-role-to-user admin system:serviceaccount:openshift-infra:turbine
 popd
@@ -58,7 +58,7 @@ npm install
 oc start-build bonjour --from-dir=. --follow
 oc new-app bonjour -l app=bonjour
 oc expose service bonjour
-oc set probe dc/bonjour --readiness --get-url=http://:8080/api/health
+oc set probe dc/bonjour --readiness --failure-threshold 3 --initial-delay-seconds 10 --get-url=http://:8080/api/health
 oc env dc/bonjour KEYCLOAK_AUTH_SERVER_URL=http://keycloak-openshift-infra.rhel-cdk.10.1.2.2.xip.io/auth
 popd
 
@@ -70,7 +70,7 @@ mvn package
 oc start-build hola --from-dir=. --follow
 oc new-app hola -l app=hola,hystrix.enabled=true
 oc expose service hola
-oc set probe dc/hola --readiness --get-url=http://:8080/api/health
+oc set probe dc/hola --readiness --failure-threshold 3 --initial-delay-seconds 30 --failure-threshold 3 --initial-delay-seconds 30 --get-url=http://:8080/api/health
 oc env dc/hola KEYCLOAK_AUTH_SERVER_URL=http://keycloak-openshift-infra.rhel-cdk.10.1.2.2.xip.io/auth
 popd
 
@@ -84,7 +84,7 @@ oc new-app aloha -l app=aloha,hystrix.enabled=true
 oc expose service aloha
 oc env dc/aloha AB_ENABLED=jolokia
 oc patch dc/aloha -p '{"spec":{"template":{"spec":{"containers":[{"name":"aloha","ports":[{"containerPort": 8778,"name":"jolokia"}]}]}}}}'
-oc set probe dc/aloha --readiness --get-url=http://:8080/api/health
+oc set probe dc/aloha --readiness --failure-threshold 3 --initial-delay-seconds 30 --get-url=http://:8080/api/health
 oc env dc/aloha KEYCLOAK_AUTH_SERVER_URL=http://keycloak-openshift-infra.rhel-cdk.10.1.2.2.xip.io/auth
 popd
 
@@ -98,7 +98,7 @@ oc new-app ola -l app=ola,hystrix.enabled=true
 oc expose service ola
 oc env dc/ola AB_ENABLED=jolokia
 oc patch dc/ola -p '{"spec":{"template":{"spec":{"containers":[{"name":"ola","ports":[{"containerPort": 8778,"name":"jolokia"}]}]}}}}'
-oc set probe dc/ola --readiness --get-url=http://:8080/api/health
+oc set probe dc/ola --readiness --failure-threshold 3 --initial-delay-seconds 30 --get-url=http://:8080/api/health
 oc env dc/ola KEYCLOAK_AUTH_SERVER_URL=http://keycloak-openshift-infra.rhel-cdk.10.1.2.2.xip.io/auth
 popd
 
@@ -112,7 +112,7 @@ oc new-app namaste -l app=ola,hystrix.enabled=true
 oc expose service namaste
 # oc env dc/namaste AB_ENABLED=jolokia
 # oc patch dc/namaste -p '{"spec":{"template":{"spec":{"containers":[{"name":"namaste","ports":[{"containerPort": 8778,"name":"jolokia"}]}]}}}}'
-oc set probe dc/namaste --readiness --get-url=http://:8080/api/health
+oc set probe dc/namaste --readiness --failure-threshold 3 --initial-delay-seconds 30 --get-url=http://:8080/api/health
 oc env dc/namaste KEYCLOAK_AUTH_SERVER_URL=http://keycloak-openshift-infra.rhel-cdk.10.1.2.2.xip.io/auth
 popd
 
@@ -125,7 +125,7 @@ oc start-build api-gateway --from-dir=. --follow
 oc new-app api-gateway -l app=api-gateway,hystrix.enabled=true
 oc expose service api-gateway
 oc env dc/api-gateway AB_ENABLED=jolokia; oc patch dc/api-gateway -p '{"spec":{"template":{"spec":{"containers":[{"name":"api-gateway","ports":[{"containerPort": 8778,"name":"jolokia"}]}]}}}}'
-oc set probe dc/api-gateway --readiness --get-url=http://:8080/health
+oc set probe dc/api-gateway --readiness --failure-threshold 3 --initial-delay-seconds 30 --get-url=http://:8080/health
 popd
 
 # frontend (NodeJS/HTML5/JS)
@@ -136,7 +136,7 @@ npm install
 oc start-build frontend --from-dir=. --follow
 oc new-app frontend -l app=frontend
 oc expose service frontend
-oc set probe dc/frontend --readiness --get-url=http://:8080/
+oc set probe dc/frontend --readiness --failure-threshold 3 --initial-delay-seconds 10 --get-url=http://:8080/
 oc env dc/frontend KEYCLOAK_AUTH_SERVER_URL=http://keycloak-openshift-infra.rhel-cdk.10.1.2.2.xip.io/auth ENABLE_SSO=true
 oc env dc/frontend ENABLE_JAEGER=true
 oc env dc/frontend ENABLE_HYSTRIX=true
