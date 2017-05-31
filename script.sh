@@ -10,6 +10,7 @@ oc project openshift-infra
 oc create -f https://raw.githubusercontent.com/hawkular/hawkular-openshift-agent/master/deploy/openshift/hawkular-openshift-agent-configmap.yaml
 oc process -f https://raw.githubusercontent.com/hawkular/hawkular-openshift-agent/master/deploy/openshift/hawkular-openshift-agent.yaml IMAGE_VERSION=1.4.1.Final | oc create -f -
 oc adm policy add-cluster-role-to-user hawkular-openshift-agent system:serviceaccount:default:hawkular-openshift-agent
+oc policy add-role-to-user admin system:serviceaccount:openshift-infra:turbine
 
 # Grafana
 oc process -f https://raw.githubusercontent.com/hawkular/hawkular-grafana-datasource/master/docker/openshift/openshift-template-persistent.yml | oc create -f -
@@ -47,7 +48,6 @@ oc login https://10.1.2.2:8443 --username=openshift-dev --password=devel
 
 # HelloWorld MSA
 oc new-project helloworld-msa --display-name="HelloWorld Microservices Architecture" --description="Playground with distinct “HelloWorld” microservices, built using different technologies, to allow developers to learn and explore."
-oc policy add-role-to-user admin system:serviceaccount:helloworld-msa:turbine
 
 # bonjour (NodeJS) microservice
 # git clone https://github.com/redhat-helloworld-msa/bonjour
