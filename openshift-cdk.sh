@@ -35,12 +35,12 @@ oc policy add-role-to-user admin system:serviceaccount:jc-central:turbine
 # git clone https://github.com/redhat-helloworld-msa/sso
 pushd sso/
 oc new-build --binary --name keycloak
+# oc env bc/keycloak OS_SUBDOMAIN='rhel-cdk.10.1.2.2.xip.io'
+# oc env bc/keycloak OS_PROJECT='openshift-infra'
 oc start-build keycloak --from-dir=. --follow
 oc new-app keycloak
 oc expose svc/keycloak
 oc set probe dc/keycloak --readiness --failure-threshold 3 --initial-delay-seconds 30 --get-url=http://:8080/auth
-# oc policy add-role-to-user admin system:serviceaccount:helloworld-sso:turbine
-oc policy add-role-to-user admin system:serviceaccount:openshift-infra:turbine
 popd
 
 ----
@@ -132,6 +132,8 @@ popd
 # git clone https://github.com/redhat-helloworld-msa/frontend
 pushd frontend/
 oc new-build --binary --name=frontend -l app=frontend
+# oc env bc/frontend OS_SUBDOMAIN='rhel-cdk.10.1.2.2.xip.io'
+# oc env bc/frontend OS_PROJECT='helloworld-msa'
 npm install
 oc start-build frontend --from-dir=. --follow
 oc new-app frontend -l app=frontend
